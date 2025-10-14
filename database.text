@@ -1,0 +1,109 @@
+classDiagram
+    direction LR
+
+    class Organization {
+      +id: PK
+      +name: str
+      +email: str
+      +address: text
+      +phone: str
+      +created_at: datetime
+      +updated_at: datetime
+    }
+
+    class User {
+      +id: PK
+      +email: str [unique]
+      +first_name: str
+      +last_name: str
+      +role: {ADMIN|MANAGER|STAFF|OPERATOR}
+      +is_owner: bool
+      +is_staff: bool
+      +is_superuser: bool
+      +is_active: bool
+      +password: str
+      +last_login: datetime
+      +created_at: datetime
+      +updated_at: datetime
+    }
+
+    class Product {
+      +id: PK
+      +name: str
+      +sku: str
+      +category: str
+      +unit: str
+      +purchase_price: decimal
+      +sell_price: decimal
+      +reorder_level: int
+      +current_stock: int
+      +barcode: str
+      +status: {ACTIVE|INACTIVE}
+      +created_at: datetime
+      +updated_at: datetime
+    }
+
+    class Supplier {
+      +id: PK
+      +name: str
+      +contact_person: str
+      +email: str
+      +phone: str
+      +address: text
+      +active: bool
+      +created_at: datetime
+      +updated_at: datetime
+    }
+
+    class Customer {
+      +id: PK
+      +name: str
+      +email: str
+      +mobile: str
+      +due_amount: decimal
+      +payment_total: decimal
+      +active: bool
+      +created_at: datetime
+      +updated_at: datetime
+    }
+
+    class Sale {
+      +id: PK
+      +invoice_number: str
+      +total_amount: decimal
+      +discount: decimal
+      +net_total: decimal
+      +payment_status: {PAID|DUE|PARTIAL}
+      +created_at: datetime
+    }
+
+    class SaleItem {
+      +id: PK
+      +quantity: int
+      +unit_price: decimal
+      +subtotal: decimal
+    }
+
+    class ContactMessage {
+      +id: PK
+      +name: str
+      +email: str
+      +subject: str
+      +message: text
+      +created_at: datetime
+    }
+
+    %% Relationships
+    Organization "1" --> "0..*" User : has
+    Organization "1" --> "0..*" Product : manages
+    Organization "1" --> "0..*" Supplier : manages
+    Organization "1" --> "0..*" Customer : manages
+    Organization "1" --> "0..*" Sale : owns
+    Organization "1" --> "0..*" ContactMessage : receives
+
+    User "1" --> "0..*" Sale : created_by
+
+    Customer "1" --> "0..*" Sale : buys
+
+    Sale "1" --> "1..*" SaleItem : contains
+    Product "1" --> "0..*" SaleItem : sold_as
