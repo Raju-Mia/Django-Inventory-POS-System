@@ -6,7 +6,6 @@ import re
 
 
 
-
 def format_bangladeshi_currency(amount):
     """
     Format a numeric value in Bangladeshi Taka (BDT) style with commas and 2 decimal places.
@@ -43,7 +42,6 @@ def format_bangladeshi_currency(amount):
 
 
 
-
 def format_phone_number(phone_number):
     """Formats phone number to +88 XXXX XXXXXX"""
 
@@ -59,6 +57,5 @@ def format_phone_number(phone_number):
         return f"+88 {phone_number[:5]} {phone_number[5:]}"  
 
     return phone_number  # Return as is if not valid
-
 
 

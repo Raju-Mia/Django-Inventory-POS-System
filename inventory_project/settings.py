@@ -63,6 +63,7 @@ INSTALLED_APPS = [
     'django_filters',
 
     # local
+    "accounts",
     "core",
 
 
@@ -160,7 +161,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 
 # Auth user model resiter.
-AUTH_USER_MODEL = 'core.CustomUser'
+AUTH_USER_MODEL = 'accounts.CustomUser'
 
 
 
@@ -174,8 +175,8 @@ REST_FRAMEWORK = {
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(days=5),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=30),
-    'USER_ID_FIELD': 'user_id',
-    'USER_ID_CLAIM': 'user_id',
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'id',
     "ROTATE_REFRESH_TOKENS": False,
     "BLACKLIST_AFTER_ROTATION": True,
     'AUTH_HEADER_TYPES': ('Bearer',),

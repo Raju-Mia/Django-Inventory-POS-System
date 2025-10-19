@@ -1,6 +1,7 @@
 
 from rest_framework import viewsets, permissions
-from core.models import Organization, CustomUser, Category, Product, Supplier, Customer, Sale, SaleItem, Purchase, PurchaseItem, StockMovement, ContactMessage
+from accounts.models import Organization, CustomUser
+from core.models import Category, Product, Supplier, Customer, Sale, SaleItem, Purchase, PurchaseItem, StockMovement, ContactMessage
 
 
 from core.serializers.accounts import (
