@@ -12,7 +12,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework.exceptions import AuthenticationFailed, ValidationError, ParseError
 from rest_framework.status import HTTP_200_OK, HTTP_401_UNAUTHORIZED, HTTP_403_FORBIDDEN
-
+import random, string
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -27,7 +27,6 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.shortcuts import get_object_or_404
 from django.db import transaction
-
 
 # Import Here
 from accounts.serializer.serializers import (
@@ -49,9 +48,11 @@ from accounts.serializer.serializers import (
 from accounts.helper import (
     send_phone_verification_otp,
     sms_otp_is_verified,
+    mail_otp_is_verified,
     # send_otp_to_email,
 )
 
+from accounts.utils.mail import send_mail, send_otp_mail, resend_otp_mail, send_reset_otp_mail
 
 from accounts.models import Organization, CustomUser, TokenTypes, VerificationTokens, OtpTypes, VerificationOTP
 from accounts.utils.otp import generate_otp, otp_send
@@ -103,31 +104,31 @@ class UserLoginView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        phone_number = request.data.get('phone_number')
+        email = request.data.get('email')
         password = request.data.get('password')
 
-        if not phone_number or not password:
+        if not email or not password:
             return Response(
-                {'error': 'Phone number and password are required.'},
+                {'error': 'Email and password are required.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        user = CustomUser.objects.filter(phone=phone_number).first()
+        user = CustomUser.objects.filter(email=email).first()
         if user is None:
             return Response(
-                {'error': 'Invalid phone number or password.'},
+                {'error': 'Invalid email or password.'},
                 status=status.HTTP_401_UNAUTHORIZED
             )
 
         if not user.check_password(password):
             return Response(
-                {'error': 'Invalid phone number or password.'},  # do not expose "wrong password" separately
+                {'error': 'Invalid email or password.'},  # do not expose "wrong password" separately
                 status=status.HTTP_401_UNAUTHORIZED
             )
 
         if not user.is_verified:
             return Response(
-                {'error': 'Account is not verified. Please verify your phone number.', 'code': 'not_verified'},
+                {'error': 'Account is not verified. Please verify your account.', 'code': 'not_verified'},
                 status=status.HTTP_403_FORBIDDEN
             )
             
@@ -152,15 +153,13 @@ class UserLoginView(APIView):
         if user.role == "manager":
             new_user = user
         elif user.role == "operator":
-            new_user = user.organization.created_by
+            new_user = user
             
-        print("The user is: ", user)
-
 
 
         user_info = {
             'phone_number': user.phone,
-            'full_name': user.full_name,
+            'full_name': user.first_name + " " + user.last_name,
             'organization_name': user.organization.name if user.organization else "Unknown Organization",
             'role': user.role,
             'address': user.address,
@@ -212,7 +211,7 @@ class UserLogoutView(APIView):
 
 
 
-#==================== signup(Phone) a user  ===============
+#==================== signup(Email) a user  ===============
 class UserSignUpView(APIView):
     permission_classes = [permissions.AllowAny]
 
@@ -220,130 +219,99 @@ class UserSignUpView(APIView):
         serializer = UserSerializer(data=request.data)
 
         if serializer.is_valid():
-            phone_number = serializer.validated_data['phone_number']
-            full_name = serializer.validated_data['full_name']
+            email = serializer.validated_data['email']
+            first_name = serializer.validated_data.get('first_name', '')
+            last_name = serializer.validated_data.get('last_name', '')
             password = serializer.validated_data['password']
             organization_name = serializer.validated_data.get('organization_name')
-
-            # ✅ Always set role as manager
             role = "manager"
 
-            # Check if phone already exists
+            # Check if user already exists
             try:
-                user = CustomUser.objects.get(phone=phone_number)
+                user = CustomUser.objects.get(email=email)
 
                 if user.is_verified:
                     return Response(
-                        {'error': 'Phone number already registered.'},
+                        {'error': 'Already registered.'},
                         status=status.HTTP_400_BAD_REQUEST
                     )
                 else:
                     # Update existing unverified user
-                    user.full_name = full_name
-                    user.address = serializer.validated_data.get('address', '')
+                    user.first_name = first_name
+                    user.last_name = last_name
                     user.role = role
                     user.set_password(password)
                     user.save()
-                    
-                    
-                    # Ensure organization exists/updates
+
+                    # Ensure organization
                     if user.organization:
-                        user_org = user.organization
-                        user_org.name = organization_name or f"Org-{full_name}"
-                        user_org.created_by = user
-                        user_org.save()
+                        org = user.organization
+                        org.name = organization_name or f"Org-{first_name}"
+                        org.save()
                     else:
                         org = Organization.objects.create(
-                            name=organization_name or f"Org-{full_name}",
-                            created_by=user
+                            name=organization_name or f"Org-{first_name}"
                         )
                         user.organization = org
                         user.save(update_fields=["organization"])
-                        
-                        
-                    #------------ OTP Manage --------
-                    # Filter all VerificationOTP objects for the given user
-                    user_verification_otp_objects = VerificationOTP.objects.filter(user=user)
-                    user_verification_otp_objects.delete()
+
+                    # Remove old OTPs and send new one
+                    VerificationOTP.objects.filter(user=user).delete()
                     if user:
-                        send_phone_verification_otp(user)
+                        # Send OTP email
+                        send_otp_mail(user)
                     else:
-                        return Response({"message": "User Verify OTP not send!"},status=status.HTTP_400_BAD_REQUEST)
-                                                
-                    
-                    #--------------------------------------------------------------------------------
-                    # Step permissions: 🎯 GRANT ALL PERMISSIONS TO ADMIN (create or update)
-
-
-
-                 
-
-                    print("Permissions created or updated successfully")
-                    #--------------------------------------------------------------------------------
-
-                
+                        return Response({"message": "Email Verify mail not send!"},status=status.HTTP_400_BAD_REQUEST)
 
                     return Response({
                         'user_id': user.id,
-                        'phone_number': user.phone,
-                        'message': 'User updated. Please verify your phone number.'
+                        'email': user.email,
+                        'message': 'User updated. Please verify your email verification.'
                     }, status=status.HTTP_200_OK)
 
             except CustomUser.DoesNotExist:
-                # New user signup
-                base_username = full_name.replace(' ', '').lower()
-                random_suffix = ''.join(random.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=6))
+                # New user registration
+                base_username = first_name.replace(' ', '').lower() or "user"
+                random_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
                 username = f"{base_username}{random_suffix}"
-
-                # Ensure username uniqueness
                 while CustomUser.objects.filter(username=username).exists():
-                    random_suffix = ''.join(random.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=6))
+                    random_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
                     username = f"{base_username}{random_suffix}"
 
-                # Save user
-                user = serializer.save(username=username, role=role)
-                user.otp = "123456"  # TODO: Replace with random OTP generator
+                user = CustomUser.objects.create(
+                    email=email,
+                    first_name=first_name,
+                    last_name=last_name,
+                    username=username,
+                    role=role,
+                )
+                user.set_password(password)
                 user.save()
+
+                # Create organization
+                org = Organization.objects.create(
+                    name=organization_name or f"Org-{first_name}"
+                )
+                user.organization = org
+                user.save(update_fields=["organization"])
+
+                # Remove old OTPs and send new one
+                VerificationOTP.objects.filter(user=user).delete()
                 
-                # Ensure organization exists
-                if user.organization:
-                    user_org = user.organization
-                    user_org.name = organization_name or f"Org-{full_name}"
-                    user_org.created_by = user
-                    user_org.save()
-                else:
-                    org = Organization.objects.create(
-                        name=organization_name or f"Org-{full_name}",
-                        created_by=user
-                    )
-                    user.organization = org
-                    user.save(update_fields=["organization"])
-                    
-                    
-                #------------ OTP Manage --------
-                # Filter all VerificationOTP objects for the given user
-                user_verification_otp_objects = VerificationOTP.objects.filter(user=user)
-                user_verification_otp_objects.delete()
                 if user:
-                    send_phone_verification_otp(user)
+                    # Send OTP email
+                    send_otp_mail(user)
                 else:
-                    return Response({"message": "User Verify OTP not send!"},status=status.HTTP_400_BAD_REQUEST)
-                
-                #--------------------------------------------------------------------------------
-                # Step permissions: 🎯 GRANT ALL PERMISSIONS TO ADMIN
-         
-              
-            
+                    return Response({"message": "Email Verify mail not send!"},status=status.HTTP_400_BAD_REQUEST)
 
                 return Response({
                     'user_id': user.id,
-                    'phone_number': user.phone,
-                    'full_name': user.full_name,
-                    'message': 'User successfully registered. Please verify your phone number.'
+                    'email': user.email,
+                    'message': 'User successfully registered. Please verify your email verification.'
                 }, status=status.HTTP_201_CREATED)
 
-        # Validation failed
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 
@@ -354,30 +322,39 @@ class OTPVerificationView(generics.GenericAPIView):
     permission_classes = [permissions.AllowAny]
     serializer_class = OTPVerificationSerializer
 
-    # Post method to verify the OTP of a user
     def post(self, request):
-        serializer = OTPVerificationSerializer(data=request.data)
-        if serializer.is_valid():
-            phone_number = serializer.validated_data['phone_number']
-            verification_otp = serializer.validated_data['otp']
-            user = CustomUser.objects.get(phone=phone_number)
-            
-            #------------- SMS OTP Verification
-            otp_verified_status,otp_obj_id,otp_verified_message = sms_otp_is_verified(user,verification_otp)
-            if otp_verified_status and otp_obj_id is not None:
-                # Filter all VerificationOTP objects for the given user
-                user_verification_otp_objects = VerificationOTP.objects.filter(user=user,id=otp_obj_id).first()
-                user_verification_otp_objects.delete()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
-                # user.is_active = True
-                # user.email_is_verified = True
-                user.is_verified = True
-                user.save()
-                return Response({"message": "User verified successfully"}, status=status.HTTP_200_OK)
-            
-            return Response({"message": otp_verified_message}, status=status.HTTP_400_BAD_REQUEST)
+        email = serializer.validated_data['email']
+        verification_otp = serializer.validated_data['otp']
+
+        try:
+            user = CustomUser.objects.get(email=email)
+        except CustomUser.DoesNotExist:
+            return Response(
+                {'error': 'User with this email does not exist.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
         
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        otp_verified_status,otp_obj_id,otp_verified_message = mail_otp_is_verified(user,verification_otp)
+        
+        if otp_verified_status and otp_obj_id is not None:
+            # Filter all VerificationOTP objects for the given user
+            user_verification_otp_objects = VerificationOTP.objects.filter(user=user,id=otp_obj_id).first()
+            user_verification_otp_objects.delete()
+
+            # user.is_active = True
+            # user.email_is_verified = True
+            user.is_verified = True
+            user.save()
+            return Response({"message": "User verified successfully"}, status=status.HTTP_200_OK)
+        
+        else:
+            return Response({'error': otp_verified_message}, status=status.HTTP_400_BAD_REQUEST)
+            
+
 
 
 
@@ -392,11 +369,11 @@ class ResendOTPView(generics.GenericAPIView):
     def post(self, request):
         serializer = ResendOTPSerializer(data=request.data)
         if serializer.is_valid():
-            phone_number = serializer.validated_data['phone_number']
+            email = serializer.validated_data['email']
             try:
-                user = CustomUser.objects.get(phone=phone_number)
+                user = CustomUser.objects.get(phone=email)
             except CustomUser.DoesNotExist:
-                return Response({'error': 'User with this phone number does not exist.'}, status=status.HTTP_404_NOT_FOUND)
+                return Response({'error': 'User with this email does not exist.'}, status=status.HTTP_404_NOT_FOUND)
             
             
             
@@ -406,7 +383,7 @@ class ResendOTPView(generics.GenericAPIView):
             user_verification_otp_objects.delete()
             
             if user:
-                send_phone_verification_otp(user)
+                resend_otp_mail(user)
             else:
                 return Response({"message": "User Verify OTP not send!"},status=status.HTTP_400_BAD_REQUEST)
 
@@ -435,22 +412,21 @@ class UserForgetPasswordView(generics.GenericAPIView):
     def post(self, request):
         serializer = ForgetPasswordSerializer(data=request.data)
         if serializer.is_valid():
-            phone_number = serializer.validated_data['phone_number']
+            email = serializer.validated_data['email']
             # password = serializer.validated_data['password']
             try:
-                user = CustomUser.objects.get(phone=phone_number)
+                user = CustomUser.objects.get(pemailhone=email)
             except CustomUser.DoesNotExist:
-                return Response({'error': 'User with this phone number does not exist.'}, status=status.HTTP_404_NOT_FOUND)
+                return Response({'error': 'User with this email does not exist.'}, status=status.HTTP_404_NOT_FOUND)
             # user.set_password(password)
 
             
             #------------ OTP Verification Manage --------
-            # Filter all VerificationOTP objects for the given user
             user_verification_otp_objects = VerificationOTP.objects.filter(user=user)
             user_verification_otp_objects.delete()
             
             if user:
-                send_phone_verification_otp(user)
+                send_reset_otp_mail(user)
             else:
                 return Response({"message": "User Verify OTP not send!"},status=status.HTTP_400_BAD_REQUEST)
 
@@ -471,17 +447,17 @@ class VerifyForgotPasswordOTP(generics.GenericAPIView):
     def post(self, request):
         serializer = VerifyForgetPasswordOTPSerializer(data=request.data)
         if serializer.is_valid():
-            phone_number = serializer.validated_data['phone_number']
+            email = serializer.validated_data['email']
             verification_otp = serializer.validated_data['otp']
             try:
-                user = CustomUser.objects.get(phone=phone_number)
+                user = CustomUser.objects.get(phone=email)
             except CustomUser.DoesNotExist:
-                return Response({'error': 'User with this phone number does not exist.'}, status=status.HTTP_404_NOT_FOUND)
+                return Response({'error': 'User with this email does not exist.'}, status=status.HTTP_404_NOT_FOUND)
             
 
             
             #------------- SMS OTP Verification
-            otp_verified_status,otp_obj_id,otp_verified_message = sms_otp_is_verified(user,verification_otp)
+            otp_verified_status,otp_obj_id,otp_verified_message = mail_otp_is_verified(user,verification_otp)
             
             if otp_verified_status and otp_obj_id is not None:
                 # Filter all VerificationOTP objects for the given user
@@ -533,7 +509,7 @@ class ChangeForgetPassword(APIView):
             user = CustomUser.objects.get(id=serializer.validated_data["user_id"])
         except CustomUser.DoesNotExist:
             return Response(
-                {"message": "User with this phone number does not exist."},
+                {"message": "User does not exist."},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -550,7 +526,6 @@ class ChangeForgetPassword(APIView):
             user.set_password(serializer.validated_data["password"])
             # user.password_has_changed = True
             user.save()
-            # Delete Verification Access Token
             verification_access_token.delete()
 
 
@@ -630,19 +605,6 @@ class UserProfileDetailView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-
-class UserDeleteProfilePictureView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def delete(self, request):
-        user = request.user
-        if not user.profile_picture:  # Checks for None or empty string
-            return Response({'message': 'You have no profile picture.'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Remove profile picture
-        user.profile_picture = None
-        user.save()
-        return Response({"message": "Profile picture deleted successfully"}, status=status.HTTP_200_OK)
 
 
 

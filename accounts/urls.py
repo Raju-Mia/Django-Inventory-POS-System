@@ -14,7 +14,6 @@ from accounts.view.views import (
     ChangeForgetPassword,
     UserChangePasswordView, 
     UserUpdateProfileView, 
-    UserDeleteProfilePictureView, 
     UserProfileDetailView
     )
 
@@ -48,7 +47,6 @@ urlpatterns = [
     path('change-password/', UserChangePasswordView.as_view(), name='change-password'),
     path('update-profile/', UserUpdateProfileView.as_view(), name='update-profile'),
     path('user-profile/', UserProfileDetailView.as_view(), name='user-profile-detail'),
-    path('delete-profile-picture/', UserDeleteProfilePictureView.as_view(), name='delete-profile-picture'),
     
     
     #-------------------- Operator --------------------------

@@ -33,7 +33,7 @@ class Organization(models.Model):
 class CustomUser(AbstractUser):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email = models.EmailField(unique=True)
-    phone = models.CharField(max_length=20, unique=True, blank=True)
+    phone = models.CharField(max_length=20, unique=True, blank=True, null=True)
     first_name = models.CharField(max_length=150, blank=True)
     last_name = models.CharField(max_length=150, blank=True)
     organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="customusers", null=True, blank=True)
@@ -55,6 +55,7 @@ class CustomUser(AbstractUser):
     last_login = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
+    
 
 
     def __str__(self):

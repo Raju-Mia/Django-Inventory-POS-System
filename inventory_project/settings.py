@@ -141,6 +141,33 @@ else:
     
 
 
+##================= Email Account Setup ====================
+if PRODUCTION:
+    # Zoho Mail Settings
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+    EMAIL_HOST = "smtp.zoho.com"
+    EMAIL_PORT = 587  # Use 465 for SSL if required
+    EMAIL_USE_TLS = True  # True for TLS, False for SSL
+    EMAIL_HOST_USER = ''  # Authenticated account
+    EMAIL_HOST_PASSWORD = ''  # Use app-specific password
+    DEFAULT_FROM_EMAIL = ''
+else:
+    # ======== Local mail server ---
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+
+    # MailHog SMTP configuration
+    EMAIL_HOST = 'localhost'        # MailHog runs locally
+    EMAIL_PORT = 1025               # MailHog SMTP port
+    EMAIL_HOST_USER = ''            # No auth required
+    EMAIL_HOST_PASSWORD = ''        # No auth required
+    EMAIL_USE_TLS = False
+    EMAIL_USE_SSL = False
+    DEFAULT_FROM_EMAIL = 'noreply@example.com'
+
+
+
+
+
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 

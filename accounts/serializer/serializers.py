@@ -90,56 +90,57 @@ class UserSerializer(serializers.ModelSerializer):
         return user
 
 
+
+
 class UserSerializer(serializers.ModelSerializer):
-    organization_name = serializers.CharField(write_only=True, required=False)  # Add this field
+    organization_name = serializers.CharField(write_only=True, required=False)
 
     class Meta:
         model = CustomUser
         fields = [
-            'id', 'full_name', 'phone_number', 'organization', 'organization_name', 'address', 'password'
+            'id', 'first_name', 'last_name', 'email', 'organization', 
+            'organization_name', 'password'
         ]
         extra_kwargs = {'password': {'write_only': True}}
 
     def create(self, validated_data):
         organization_name = validated_data.pop('organization_name', None)
 
-        # Generate random username
-        base_username = validated_data.get('full_name', '').replace(' ', '').lower()
+        # Generate unique username
+        base_username = validated_data.get('first_name', '').replace(' ', '').lower()
         random_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
         username = f"{base_username}{random_suffix}"
         while CustomUser.objects.filter(username=username).exists():
             random_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
             username = f"{base_username}{random_suffix}"
 
-        # 🔑 Force role=manager here
+        # Create user
         user = CustomUser(
-            phone_number=validated_data['phone_number'],
-            full_name=validated_data['full_name'],
-            address=validated_data.get('address', ''),
+            email=validated_data['email'],
+            first_name=validated_data.get('first_name', ''),
+            last_name=validated_data.get('last_name', ''),
             username=username,
-            role="manager",   # 👈 FIXED
+            role="manager",  # default role
         )
         user.set_password(validated_data['password'])
         user.save()
 
-        # ✅ Create or assign organization
+        # Create or assign organization
         if organization_name:
-            organization, created = Organization.objects.get_or_create(
+            organization, _ = Organization.objects.get_or_create(
                 name=organization_name,
-                defaults={'address': validated_data.get('address', '')}
             )
         else:
-            # fallback: use full_name if no org name provided
             organization = Organization.objects.create(
-                name=f"Org-{user.full_name}",
-                address=validated_data.get('address', ''),
-                created_by=user
+                name=f"Org-{user.first_name or 'User'}"
             )
 
         user.organization = organization
         user.save(update_fields=["organization"])
 
         return user
+
+
 
 
 # UserLoginSerializer is used to serialize the user login data
@@ -155,7 +156,7 @@ class UserUpdateProfileSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = CustomUser
-        fields = ['full_name', 'email', 'contact_number', 'bin', 'address', 'profile_picture', 'organization_name']
+        fields = ['first_name', 'last_name', 'email', 'contact_number', 'bin', 'address', 'profile_picture', 'organization_name']
         
     def get_organization_name(self, obj):
         if obj.organization:
@@ -171,7 +172,7 @@ class UserProfileDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CustomUser
-        fields = ['full_name', 'email', 'phone_number', 'contact_number', 'bin', 'address', 'profile_picture', 'plan_name', 'organization_name']
+        fields = ['first_name', 'last_name', 'email', 'number', 'contact_number', 'address', 'profile_picture', 'organization_name']
 
     def get_plan_name(self, obj):
         subscription = obj.subscription_set.filter(active_status=True).first()
@@ -198,27 +199,27 @@ class UserDeleteProfilePictureSerializer(serializers.ModelSerializer):
 
 
 class OTPVerificationSerializer(serializers.Serializer):
-    phone_number = serializers.CharField()
+    email = serializers.CharField()
     otp = serializers.CharField()
 
 
 
 # ResendOTPSerializer is used to serialize the resend OTP data
 class ResendOTPSerializer(serializers.Serializer):
-    phone_number = serializers.CharField()
+    email = serializers.CharField()
 
 
 
 # UserChangePasswordSerializer is used to serialize the user change password data
 class PhoneNumberOTPSerializer(serializers.Serializer):
-    phone_number = serializers.CharField()
+    email = serializers.CharField()
 
     # Validate method to check if the user with the given phone number exists
-    def validate_phone_number(self, value):
+    def validate_email(self, value):
         try:
-            user = CustomUser.objects.get(phone_number=value)
+            user = CustomUser.objects.get(email=value)
         except CustomUser.DoesNotExist:
-            raise serializers.ValidationError("User with this phone number does not exist.")
+            raise serializers.ValidationError("User with this email does not exist.")
         return value
 
 
@@ -241,7 +242,7 @@ class ForgetPasswordSerializer(serializers.Serializer):
 
 
 class VerifyForgetPasswordOTPSerializer(serializers.Serializer):
-    phone_number = serializers.CharField()
+    email = serializers.CharField()
     otp = serializers.CharField()
 
 
