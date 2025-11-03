@@ -47,3 +47,6 @@ It provides user authentication, organizational management, and essential busine
 ---
 
 ## 📁 Project Structure
+
+
+## Postman API Documentation: https://documenter.getpostman.com/view/34389262/2sB3QQKTeB
