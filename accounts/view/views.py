@@ -150,10 +150,10 @@ class UserLoginView(APIView):
         
         
         #check the user role
-        if user.role == "manager":
-            new_user = user
-        elif user.role == "operator":
-            new_user = user
+        # if user.role == "manager":
+        #     new_user = user
+        # elif user.role == "operator":
+        #     new_user = user
             
 
 
@@ -162,7 +162,6 @@ class UserLoginView(APIView):
             'full_name': user.first_name + " " + user.last_name,
             'organization_name': user.organization.name if user.organization else "Unknown Organization",
             'role': user.role,
-            'address': user.address,
             'profile_picture': user.profile_picture.url if user.profile_picture else None,
         }
 
@@ -224,7 +223,8 @@ class UserSignUpView(APIView):
             last_name = serializer.validated_data.get('last_name', '')
             password = serializer.validated_data['password']
             organization_name = serializer.validated_data.get('organization_name')
-            role = "manager"
+            role = serializer.validated_data.get('role', 'manager')  # ✅ take from frontend
+
 
             # Check if user already exists
             try:
@@ -336,6 +336,9 @@ class OTPVerificationView(generics.GenericAPIView):
                 {'error': 'User with this email does not exist.'},
                 status=status.HTTP_404_NOT_FOUND
             )
+            
+        if user.is_verified:
+            return Response({'error': 'User is already verified.'}, status=status.HTTP_400_BAD_REQUEST)
 
         
         otp_verified_status,otp_obj_id,otp_verified_message = mail_otp_is_verified(user,verification_otp)
@@ -371,12 +374,11 @@ class ResendOTPView(generics.GenericAPIView):
         if serializer.is_valid():
             email = serializer.validated_data['email']
             try:
-                user = CustomUser.objects.get(phone=email)
+                user = CustomUser.objects.get(email=email)
             except CustomUser.DoesNotExist:
                 return Response({'error': 'User with this email does not exist.'}, status=status.HTTP_404_NOT_FOUND)
             
-            
-            
+
             #------------ OTP Verification Manage --------
             # Filter all VerificationOTP objects for the given user
             user_verification_otp_objects = VerificationOTP.objects.filter(user=user)
@@ -389,7 +391,7 @@ class ResendOTPView(generics.GenericAPIView):
 
 
             response_data = {
-                "message": "Reset OTP successfuly send to your phone number",
+                "message": "Resend OTP successfuly send to your mail.",
                 "user_id": user.id
             }
             return Response(
@@ -410,15 +412,14 @@ class UserForgetPasswordView(generics.GenericAPIView):
 
     # Post method to update the password of a user
     def post(self, request):
+        print(request.data)
         serializer = ForgetPasswordSerializer(data=request.data)
         if serializer.is_valid():
             email = serializer.validated_data['email']
-            # password = serializer.validated_data['password']
             try:
-                user = CustomUser.objects.get(pemailhone=email)
+                user = CustomUser.objects.get(email=email)
             except CustomUser.DoesNotExist:
                 return Response({'error': 'User with this email does not exist.'}, status=status.HTTP_404_NOT_FOUND)
-            # user.set_password(password)
 
             
             #------------ OTP Verification Manage --------
@@ -431,7 +432,7 @@ class UserForgetPasswordView(generics.GenericAPIView):
                 return Response({"message": "User Verify OTP not send!"},status=status.HTTP_400_BAD_REQUEST)
 
 
-            return Response({"message": "successfully otp please verify your phone number"}, status=status.HTTP_200_OK)
+            return Response({"message": "successfully otp please verify your email"}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -450,7 +451,7 @@ class VerifyForgotPasswordOTP(generics.GenericAPIView):
             email = serializer.validated_data['email']
             verification_otp = serializer.validated_data['otp']
             try:
-                user = CustomUser.objects.get(phone=email)
+                user = CustomUser.objects.get(email=email)
             except CustomUser.DoesNotExist:
                 return Response({'error': 'User with this email does not exist.'}, status=status.HTTP_404_NOT_FOUND)
             
@@ -464,8 +465,6 @@ class VerifyForgotPasswordOTP(generics.GenericAPIView):
                 user_verification_otp_objects = VerificationOTP.objects.filter(user=user,id=otp_obj_id).first()
                 user_verification_otp_objects.delete()
 
-                # user.is_active = True
-                # user.email_is_verified = True
                 user.is_verified = True
                 user.save()
                 

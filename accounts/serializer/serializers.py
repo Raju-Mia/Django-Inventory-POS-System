@@ -94,20 +94,24 @@ class UserSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     organization_name = serializers.CharField(write_only=True, required=False)
+    role = serializers.ChoiceField(
+        choices=CustomUser.ROLE_CHOICES, required=False
+    )
 
     class Meta:
         model = CustomUser
         fields = [
-            'id', 'first_name', 'last_name', 'email', 'organization', 
-            'organization_name', 'password'
+            'id', 'first_name', 'last_name', 'email', 'organization',
+            'organization_name', 'password', 'role'
         ]
         extra_kwargs = {'password': {'write_only': True}}
 
     def create(self, validated_data):
         organization_name = validated_data.pop('organization_name', None)
+        role = validated_data.pop('role', 'manager')  # default if not provided
 
         # Generate unique username
-        base_username = validated_data.get('first_name', '').replace(' ', '').lower()
+        base_username = validated_data.get('first_name', '').replace(' ', '').lower() or "user"
         random_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
         username = f"{base_username}{random_suffix}"
         while CustomUser.objects.filter(username=username).exists():
@@ -120,7 +124,7 @@ class UserSerializer(serializers.ModelSerializer):
             first_name=validated_data.get('first_name', ''),
             last_name=validated_data.get('last_name', ''),
             username=username,
-            role="manager",  # default role
+            role=role,
         )
         user.set_password(validated_data['password'])
         user.save()
@@ -142,7 +146,6 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 
-
 # UserLoginSerializer is used to serialize the user login data
 class UserLoginSerializer(serializers.Serializer):
     phone_number = serializers.CharField()
@@ -152,33 +155,21 @@ class UserLoginSerializer(serializers.Serializer):
 
 
 class UserUpdateProfileSerializer(serializers.ModelSerializer):
-    organization_name = serializers.SerializerMethodField()
-    
     class Meta:
         model = CustomUser
-        fields = ['first_name', 'last_name', 'email', 'contact_number', 'bin', 'address', 'profile_picture', 'organization_name']
+        fields = ['first_name', 'last_name', 'phone', 'profile_picture']
         
-    def get_organization_name(self, obj):
-        if obj.organization:
-            return obj.organization.name
-        return None
 
 
 
 
 class UserProfileDetailSerializer(serializers.ModelSerializer):
-    plan_name = serializers.SerializerMethodField()
     organization_name = serializers.SerializerMethodField()
 
     class Meta:
         model = CustomUser
-        fields = ['first_name', 'last_name', 'email', 'number', 'contact_number', 'address', 'profile_picture', 'organization_name']
+        fields = ['first_name', 'last_name', 'email', 'phone', 'role', 'profile_picture', 'organization_name']
 
-    def get_plan_name(self, obj):
-        subscription = obj.subscription_set.filter(active_status=True).first()
-        if subscription and subscription.subscription_plan:
-            return subscription.subscription_plan.plan_category
-        return None
 
     def get_organization_name(self, obj):
         if obj.organization:
@@ -226,17 +217,15 @@ class PhoneNumberOTPSerializer(serializers.Serializer):
 
 # ForgetPasswordSerializer is used to serialize the forget password data
 class ForgetPasswordSerializer(serializers.Serializer):
-    phone_number = serializers.CharField()
-    # password = serializers.CharField()
+    email = serializers.CharField()
 
     # Validate method to check if the user with the given phone number exists
     def validate(self, data):
-        phone_number = data.get('phone_number')
-        # password = data.get('password')
+        email = data.get('email')
         try:
-            user = CustomUser.objects.get(phone_number=phone_number)
+            user = CustomUser.objects.get(email=email)
         except CustomUser.DoesNotExist:
-            raise serializers.ValidationError("User with this phone number does not exist.")
+            raise serializers.ValidationError("User with this Email does not exist.")
         return data
 
 

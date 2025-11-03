@@ -18,7 +18,7 @@ router.register(r'stock-movements', accounts.StockMovementViewSet)
 router.register(r'contact-messages', accounts.ContactMessageViewSet)
 
 urlpatterns = [
-    # path("", include(router.urls)),
+    path("", include(router.urls)),
 ]
 
 

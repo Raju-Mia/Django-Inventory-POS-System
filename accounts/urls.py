@@ -50,9 +50,9 @@ urlpatterns = [
     
     
     #-------------------- Operator --------------------------
-    path("v1/operators/create/", OperatorCreateAPIView.as_view(), name="operator-create"),
-    path("v1/operators/", OperatorListAPIView.as_view(), name="operator-list"),
-    path("v1/operators/<str:user_id>/", OperatorDetailAPIView.as_view(), name="operator-detail"),
-    path("v1/operators/<str:user_id>/delete/", OperatorDeleteAPIView.as_view(), name="operator-delete"),
+    path("operators-list/", OperatorListAPIView.as_view(), name="operator-list"),
+    path("operator/create/", OperatorCreateAPIView.as_view(), name="operator-create"),
+    path("operator/<str:id>/", OperatorDetailAPIView.as_view(), name="operator-detail"),
+    path("operators/<str:id>/delete/", OperatorDeleteAPIView.as_view(), name="operator-delete"),
 
 ]

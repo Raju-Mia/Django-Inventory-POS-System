@@ -1,79 +1,100 @@
+#  core/views.py
 
 from rest_framework import viewsets, permissions
 from accounts.models import Organization, CustomUser
-from core.models import Category, Product, Supplier, Customer, Sale, SaleItem, Purchase, PurchaseItem, StockMovement, ContactMessage
-
-
+from core.models import (
+    Category, Product, Supplier, Customer, Sale, SaleItem, 
+    Purchase, PurchaseItem, StockMovement, ContactMessage
+)
 from core.serializers.accounts import (
     OrganizationSerializer, UserSerializer, CategorySerializer, ProductSerializer,
     SupplierSerializer, CustomerSerializer, SaleSerializer, SaleItemSerializer,
     PurchaseSerializer, PurchaseItemSerializer, StockMovementSerializer, ContactMessageSerializer
 )
 
-class IsOrgMember(permissions.BasePermission):
-    """
-    Simplest placeholder: allow if user is authenticated.
-    Replace with organization-level checks.
-    """
-    def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated
+
+# Base class for all organization-scoped models
+class OrgModelViewSet(viewsets.ModelViewSet):
+    permission_classes = [permissions.IsAuthenticated]  # must be logged in
+
+    def get_queryset(self):
+        user = self.request.user
+        # Ensure model has an 'organization' FK
+        return self.queryset.filter(organization=user.organization)
+
+    def perform_create(self, serializer):
+        serializer.save(organization=self.request.user.organization)
+
+
+# ----------------------------
+# VIEWSETS
+# ----------------------------
 
 class OrganizationViewSet(viewsets.ModelViewSet):
     queryset = Organization.objects.all()
     serializer_class = OrganizationSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated]  # only logged-in users
+
 
 class UserViewSet(viewsets.ModelViewSet):
     queryset = CustomUser.objects.all()
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-class CategoryViewSet(viewsets.ModelViewSet):
+    def get_queryset(self):
+        # Users of the same organization only
+        return self.queryset.filter(organization=self.request.user.organization)
+
+    def perform_create(self, serializer):
+        serializer.save(organization=self.request.user.organization)
+
+
+class CategoryViewSet(OrgModelViewSet):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
-    permission_classes = [IsOrgMember]
 
-class ProductViewSet(viewsets.ModelViewSet):
+
+class ProductViewSet(OrgModelViewSet):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
-    permission_classes = [IsOrgMember]
 
-class SupplierViewSet(viewsets.ModelViewSet):
+
+class SupplierViewSet(OrgModelViewSet):
     queryset = Supplier.objects.all()
     serializer_class = SupplierSerializer
-    permission_classes = [IsOrgMember]
 
-class CustomerViewSet(viewsets.ModelViewSet):
+
+class CustomerViewSet(OrgModelViewSet):
     queryset = Customer.objects.all()
     serializer_class = CustomerSerializer
-    permission_classes = [IsOrgMember]
 
-class SaleViewSet(viewsets.ModelViewSet):
+
+class SaleViewSet(OrgModelViewSet):
     queryset = Sale.objects.all()
     serializer_class = SaleSerializer
-    permission_classes = [IsOrgMember]
 
-class SaleItemViewSet(viewsets.ModelViewSet):
+
+class SaleItemViewSet(OrgModelViewSet):
     queryset = SaleItem.objects.all()
     serializer_class = SaleItemSerializer
-    permission_classes = [IsOrgMember]
 
-class PurchaseViewSet(viewsets.ModelViewSet):
+
+class PurchaseViewSet(OrgModelViewSet):
     queryset = Purchase.objects.all()
     serializer_class = PurchaseSerializer
-    permission_classes = [IsOrgMember]
 
-class PurchaseItemViewSet(viewsets.ModelViewSet):
+
+class PurchaseItemViewSet(OrgModelViewSet):
     queryset = PurchaseItem.objects.all()
     serializer_class = PurchaseItemSerializer
-    permission_classes = [IsOrgMember]
 
-class StockMovementViewSet(viewsets.ModelViewSet):
+
+class StockMovementViewSet(OrgModelViewSet):
     queryset = StockMovement.objects.all()
     serializer_class = StockMovementSerializer
-    permission_classes = [IsOrgMember]
+
 
 class ContactMessageViewSet(viewsets.ModelViewSet):
     queryset = ContactMessage.objects.all()
     serializer_class = ContactMessageSerializer
-    permission_classes = [permissions.AllowAny]  # contact form open
+    permission_classes = [permissions.AllowAny]  # open to public

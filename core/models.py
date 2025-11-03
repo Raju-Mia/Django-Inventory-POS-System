@@ -9,9 +9,7 @@ from django.utils.timezone import timedelta
 
 
 #from accounts models
-from accounts.models import Organization, CustomUser, TokenTypes, VerificationTokens, OtpTypes, VerificationOTP
-
-
+from accounts.models import Organization, CustomUser
 
 
 
