@@ -1,0 +1,176 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Invoice {{ sale.invoice_number }}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --ink:#111;
+    --muted:#666;
+    --line:#ddd;
+    --accent:#2b7cff;
+  }
+  *{ box-sizing:border-box; }
+  body{
+    font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,Helvetica,sans-serif;
+    font-size: 12px; color: var(--ink); margin:0; padding:0;
+  }
+  .wrap{ max-width: 840px; margin: 0 auto; padding: 24px; }
+  header{
+    display:flex; align-items:flex-start; justify-content:space-between; gap:24px;
+    padding-bottom:16px; border-bottom:1px solid var(--line);
+  }
+  .brand h1{ margin:0; font-size:20px; letter-spacing:0.3px;}
+  .brand small{ color:var(--muted); }
+  .meta{text-align:right; font-size:12px;}
+  .badge{
+    display:inline-block; padding:4px 8px; border:1px solid var(--accent); color:var(--accent);
+    border-radius:999px; font-weight:600; letter-spacing:0.3px; font-size:11px;
+  }
+  .grid{display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin:16px 0 8px;}
+  .panel{padding:12px; border:1px solid var(--line); border-radius:8px;}
+  .panel h4{margin:0 0 8px; font-size:12px; text-transform:uppercase; letter-spacing:0.8px; color:var(--muted);}
+  .panel p{margin:2px 0;}
+  table{width:100%; border-collapse:collapse; margin-top:12px; font-size:12px;}
+  th, td{padding:10px 8px; border-bottom:1px solid var(--line); vertical-align:top;}
+  th{text-align:left; font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.7px;}
+  td.num{text-align:right; white-space:nowrap;}
+  .totals{margin-top:12px; display:grid; grid-template-columns: 1fr minmax(240px, 320px); gap:16px;}
+  .totals .note{
+    color: var(--muted); font-size:11px; line-height:1.5; border:1px dashed var(--line);
+    border-radius:8px; padding:12px;
+  }
+  .totals .sheet{border:1px solid var(--line); border-radius:8px; overflow:hidden;}
+  .sheet table{margin:0;}
+  .sheet tr:last-child td{border-bottom:none;}
+  .sheet tr td.label{color:var(--muted);}
+  .grand{font-weight:700; font-size:13px;}
+  footer{margin-top:20px; padding-top:10px; border-top:1px solid var(--line); color:var(--muted);
+    font-size:11px; display:flex; justify-content:space-between;}
+</style>
+</head>
+<body>
+  <div class="wrap">
+
+    <header>
+      <div class="brand">
+        <h1>{{ sale.organization.name }}</h1>
+        {% if sale.organization.address %}<small>{{ sale.organization.address }}</small><br>{% endif %}
+        {% if sale.organization.phone %}<small>{{ sale.organization.phone }}</small><br>{% endif %}
+        {% if sale.organization.email %}<small>{{ sale.organization.email }}</small>{% endif %}
+      </div>
+
+      <div class="meta">
+        <div class="badge">Invoice</div>
+        <p><strong>#{{ sale.invoice_number }}</strong></p>
+        <p>Date: {{ sale.created_at|date:"M d, Y" }}</p>
+        {% if sale.created_by %}<p>Handled by: {{ sale.created_by }}</p>{% endif %}
+      </div>
+    </header>
+
+    <section class="grid">
+      <div class="panel">
+        <h4>Bill To</h4>
+        {% if sale.customer %}
+          <p><strong>{{ sale.customer.name }}</strong></p>
+          {% if sale.customer.address %}<p>{{ sale.customer.address }}</p>{% endif %}
+          {% if sale.customer.mobile %}<p>{{ sale.customer.mobile }}</p>{% endif %}
+          {% if sale.customer.email %}<p>{{ sale.customer.email }}</p>{% endif %}
+        {% else %}
+          <p><strong>Walk-in Customer</strong></p>
+        {% endif %}
+      </div>
+
+      <div class="panel">
+        <h4>Payment</h4>
+        <p>Status: <strong>{{ sale.get_payment_status_display }}</strong></p>
+        <p>Paid: <strong>{{ sale.paid_amount }}</strong></p>
+        <p>Due: 
+          <strong>
+            {% with sale.net_total|floatformat:2 as net and sale.paid_amount|floatformat:2 as paid %}
+              {{ net|add:"-"|add:paid }}
+            {% endwith %}
+          </strong>
+        </p>
+        {% if sale.notes %}<p>Note: {{ sale.notes }}</p>{% endif %}
+      </div>
+    </section>
+
+    <table aria-label="Invoice items">
+      <thead>
+        <tr>
+          <th style="width:44%;">Item</th>
+          <th>SKU</th>
+          <th class="num">Qty</th>
+          <th class="num">Unit Price</th>
+          <th class="num">Line Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in sale.items.all %}
+        <tr>
+          <td>
+            <strong>{{ item.product.name }}</strong>
+            {% if item.product.description %}
+              <div style="color:#666; font-size:11px;">{{ item.product.description|truncatechars:120 }}</div>
+            {% endif %}
+          </td>
+          <td>{{ item.product.sku }}</td>
+          <td class="num">{{ item.quantity }}</td>
+          <td class="num">{{ item.unit_price }}</td>
+          <td class="num">{{ item.subtotal }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="totals">
+      <div class="note">
+        <strong>Thank you!</strong><br>
+        This invoice was generated electronically. If you have questions, please contact us.
+      </div>
+      <div class="sheet">
+        <table>
+          <tbody>
+            <tr>
+              <td class="label">Subtotal</td>
+              <td class="num">{{ sale.total_amount }}</td>
+            </tr>
+            <tr>
+              <td class="label">Discount</td>
+              <td class="num">- {{ sale.discount }}</td>
+            </tr>
+            <tr>
+              <td class="label">VAT/Tax</td>
+              <td class="num">{{ sale.vat }}</td>
+            </tr>
+            <tr class="grand">
+              <td class="label">Total</td>
+              <td class="num">{{ sale.net_total }}</td>
+            </tr>
+            <tr>
+              <td class="label">Paid</td>
+              <td class="num">{{ sale.paid_amount }}</td>
+            </tr>
+            <tr>
+              <td class="label">Amount Due</td>
+              <td class="num">
+                <strong>
+                  {{ sale.net_total|floatformat:2|add:"-"|add:sale.paid_amount }}
+                </strong>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <footer>
+      <div>Invoice #{{ sale.invoice_number }}</div>
+      <div>{{ sale.organization.name }}</div>
+    </footer>
+  </div>
+</body>
+</html>

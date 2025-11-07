@@ -100,6 +100,7 @@ class CustomTokenRefreshView(TokenRefreshView):
 
 
 #==================== login(Phone) a user  ===============
+
 class UserLoginView(APIView):
     permission_classes = [permissions.AllowAny]
 
@@ -114,15 +115,9 @@ class UserLoginView(APIView):
             )
 
         user = CustomUser.objects.filter(email=email).first()
-        if user is None:
+        if user is None or not user.check_password(password):
             return Response(
                 {'error': 'Invalid email or password.'},
-                status=status.HTTP_401_UNAUTHORIZED
-            )
-
-        if not user.check_password(password):
-            return Response(
-                {'error': 'Invalid email or password.'},  # do not expose "wrong password" separately
                 status=status.HTTP_401_UNAUTHORIZED
             )
 
@@ -131,38 +126,28 @@ class UserLoginView(APIView):
                 {'error': 'Account is not verified. Please verify your account.', 'code': 'not_verified'},
                 status=status.HTTP_403_FORBIDDEN
             )
-            
         if not user.is_active:
             return Response(
-                {'error': 'Account is deactivated. Please contact your administration!.'},
+                {'error': 'Account is deactivated. Please contact your administration!'},
                 status=status.HTTP_403_FORBIDDEN
             )
-            
         if user.is_terminated:
             return Response(
-                {'error': 'Account is Terminated. Please contact your administration!.'},
+                {'error': 'Account is terminated. Please contact your administration!'},
                 status=status.HTTP_403_FORBIDDEN
             )
-   
+
         # 🔑 Generate tokens
         refresh = RefreshToken.for_user(user)
         access_token = str(refresh.access_token)
-        
-        
-        #check the user role
-        # if user.role == "manager":
-        #     new_user = user
-        # elif user.role == "operator":
-        #     new_user = user
-            
-
 
         user_info = {
             'phone_number': user.phone,
-            'full_name': user.first_name + " " + user.last_name,
+            'full_name': f"{user.first_name} {user.last_name}",
             'organization_name': user.organization.name if user.organization else "Unknown Organization",
             'role': user.role,
-            'profile_picture': user.profile_picture.url if user.profile_picture else None,
+            # ✅ Build absolute URL for image
+            'profile_picture': request.build_absolute_uri(user.profile_picture.url) if user.profile_picture else None,
         }
 
         return Response({
@@ -171,7 +156,6 @@ class UserLoginView(APIView):
             'refresh_token': str(refresh),
             'user_info': user_info,
         }, status=status.HTTP_200_OK)
-
 
 
 

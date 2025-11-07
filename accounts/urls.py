@@ -49,10 +49,10 @@ urlpatterns = [
     path('user-profile/', UserProfileDetailView.as_view(), name='user-profile-detail'),
     
     
-    #-------------------- Operator --------------------------
-    path("operators-list/", OperatorListAPIView.as_view(), name="operator-list"),
-    path("operator/create/", OperatorCreateAPIView.as_view(), name="operator-create"),
-    path("operator/<str:id>/", OperatorDetailAPIView.as_view(), name="operator-detail"),
-    path("operators/<str:id>/delete/", OperatorDeleteAPIView.as_view(), name="operator-delete"),
+    #-------------------- User Management --------------------------
+    path("user-list/", OperatorListAPIView.as_view(), name="operator-list"),
+    path("user/create/", OperatorCreateAPIView.as_view(), name="operator-create"),
+    path("user/<str:id>/details/", OperatorDetailAPIView.as_view(), name="operator-detail"),
+    path("user/<str:id>/delete/", OperatorDeleteAPIView.as_view(), name="operator-delete"),
 
 ]

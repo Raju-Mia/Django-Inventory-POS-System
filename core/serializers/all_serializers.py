@@ -6,6 +6,10 @@ from core.models import (
     StockMovement, ContactMessage
 )
 
+from django.db.models import Sum, F, Q
+
+
+
 # -----------------------
 # Organization & User
 # -----------------------
@@ -49,22 +53,7 @@ class CustomerSerializer(serializers.ModelSerializer):
         fields = "__all__"
         read_only_fields = ["organization", "created_at", "updated_at"]
 
-# -----------------------
-# Sale & SaleItem
-# -----------------------
-# class SaleItemSerializer(serializers.ModelSerializer):
-#     class Meta:
-#         model = SaleItem
-#         fields = "__all__"
-#         read_only_fields = ["sale", "subtotal"]
 
-# class SaleSerializer(serializers.ModelSerializer):
-#     items = SaleItemSerializer(many=True, read_only=True)
-
-#     class Meta:
-#         model = Sale
-#         fields = "__all__"
-#         read_only_fields = ["organization", "created_by", "created_at", "updated_at", "total_amount", "net_total"]
 
 
 class SaleItemSerializer(serializers.ModelSerializer):
@@ -218,3 +207,81 @@ class ContactMessageSerializer(serializers.ModelSerializer):
         model = ContactMessage
         fields = "__all__"
         read_only_fields = ["created_at", "is_read"]
+
+
+
+# -----------------------
+# Reports
+# -----------------------
+
+
+
+class SaleItemSummarySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SaleItem
+        # fields = ["id", "product", "quantity", "unit_price", "subtotal"]
+        fields = '__all__'
+
+
+class SaleSummarySerializer(serializers.ModelSerializer):
+    customer_name = serializers.SerializerMethodField()
+    items_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Sale
+        # fields = [
+        #     "id",
+        #     "invoice_number",
+        #     "customer_name",
+        #     "created_at",
+        #     "total_amount",
+        #     "discount",
+        #     "vat",
+        #     "net_total",
+        #     "items_count",
+        # ]
+        fields = '__all__'
+
+    def get_customer_name(self, obj):
+        return obj.customer.name if obj.customer else "Walk-in"
+
+    def get_items_count(self, obj):
+        # ✅ use Django ORM Sum instead of serializers.Sum
+        return obj.items.aggregate(total=Sum("quantity")).get("total") or 0
+
+
+
+
+
+
+class ProductStockSerializer(serializers.ModelSerializer):
+    category_name = serializers.SerializerMethodField()
+    stock_value_cost = serializers.SerializerMethodField()
+    stock_value_retail = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Product
+        fields = [
+            "id",
+            "product_id",
+            "name",
+            "sku",
+            "category_name",
+            "unit",
+            "purchase_price",
+            "sell_price",
+            "reorder_level",
+            "current_stock",
+            "status",
+            "stock_value_cost",
+            "stock_value_retail",
+        ]
+
+    def get_category_name(self, obj):
+        return obj.category.name if obj.category else None
+
+    def get_stock_value_cost(self, obj):
+        return obj.purchase_price * obj.current_stock
+
+    def get_stock_value_retail(self, obj):
+        return obj.sell_price * obj.current_stock

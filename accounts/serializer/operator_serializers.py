@@ -48,7 +48,7 @@ class OperatorSerializer(serializers.ModelSerializer):
         password = validated_data.pop("password", None) or generate_random_password()
 
         # Always assign role = operator
-        validated_data["role"] = "operator"
+        # validated_data["role"] = 
 
         # ✅ Generate unique username
         base_username = (validated_data.get("first_name") or "operator").replace(" ", "").lower()
@@ -61,7 +61,9 @@ class OperatorSerializer(serializers.ModelSerializer):
         # Create operator user
         user = CustomUser(
             username=username,
-            **validated_data
+            **validated_data,
+            
+
         )
         user.set_password(password)
 
@@ -69,6 +71,8 @@ class OperatorSerializer(serializers.ModelSerializer):
         if creator and creator.organization:
             user.organization = creator.organization
 
+        user.is_active = True
+        user.is_verified = True
         user.save()
 
         # ✅ If user still has no organization, auto-create one

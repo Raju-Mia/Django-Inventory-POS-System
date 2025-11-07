@@ -38,7 +38,6 @@ class OperatorListAPIView(APIView):
 
         # ✅ Filter only operators in this organization
         queryset = CustomUser.objects.filter(
-            role="operator",
             organization=user.organization
         )
 
@@ -62,7 +61,7 @@ class OperatorCreateAPIView(APIView):
         # Operators cannot create new operators
         if request.user.role == "operator":
             return Response(
-                {"error": "Operators are not allowed to create new operators."},
+                {"error": "User are not allowed to create new operators."},
                 status=status.HTTP_403_FORBIDDEN
             )
 
@@ -90,7 +89,6 @@ class OperatorDetailAPIView(APIView):
         operator = get_object_or_404(
             CustomUser,
             id=id,
-            role="operator",
             organization=request.user.organization
         )
         serializer = OperatorSerializer(operator)
@@ -106,7 +104,7 @@ class OperatorDeleteAPIView(APIView):
         # Operators cannot delete others
         if request.user.role == "operator":
             return Response(
-                {"error": "Operators are not allowed to delete operators."},
+                {"error": "User are not allowed to delete operators."},
                 status=status.HTTP_403_FORBIDDEN
             )
 
@@ -121,11 +119,10 @@ class OperatorDeleteAPIView(APIView):
         operator = get_object_or_404(
             CustomUser,
             id=id,
-            role="operator",
             organization=request.user.organization
         )
 
         operator.is_active = False
         operator.is_terminated = True
         operator.save()
-        return Response({"detail": "Operator soft deleted successfully."}, status=status.HTTP_200_OK)
+        return Response({"detail": "User soft deleted successfully."}, status=status.HTTP_200_OK)
