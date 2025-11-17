@@ -39,9 +39,19 @@ from core.serializers.all_serializers import (
 )
 
 
+from django.db.models import Count, Sum, F
+from django.db.models.functions import TruncDate, TruncMonth
+from datetime import timedelta
+from django.utils import timezone
+
+
+from core.permissions import RolePermission
+
+
+
 # Base class for all organization-scoped models
 class OrgModelViewSet(viewsets.ModelViewSet):
-    permission_classes = [permissions.IsAuthenticated]  # must be logged in
+    permission_classes = [permissions.IsAuthenticated, RolePermission]  # must be logged in
 
     def get_queryset(self):
         user = self.request.user
@@ -59,13 +69,13 @@ class OrgModelViewSet(viewsets.ModelViewSet):
 class OrganizationViewSet(viewsets.ModelViewSet):
     queryset = Organization.objects.all()
     serializer_class = OrganizationSerializer
-    permission_classes = [permissions.IsAuthenticated]  # only logged-in users
+    permission_classes = [permissions.IsAuthenticated, RolePermission]  # only logged-in users
 
 
 class UserViewSet(viewsets.ModelViewSet):
     queryset = CustomUser.objects.all()
     serializer_class = UserSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, RolePermission]
 
     def get_queryset(self):
         # Users of the same organization only
@@ -75,29 +85,62 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer.save(organization=self.request.user.organization)
 
 
+
+
 class CategoryViewSet(OrgModelViewSet):
-    queryset = Category.objects.all()
+    permission_classes = [permissions.IsAuthenticated, RolePermission]
     serializer_class = CategorySerializer
+
+    def get_queryset(self):
+        return Category.objects.filter(organization=self.request.user.organization)
+
+    def perform_create(self, serializer):
+        serializer.save(organization=self.request.user.organization)
+
 
 
 class ProductViewSet(OrgModelViewSet):
-    queryset = Product.objects.all()
+    permission_classes = [permissions.IsAuthenticated, RolePermission]
     serializer_class = ProductSerializer
+    
+    def get_queryset(self):
+        return Product.objects.filter(organization=self.request.user.organization)
+
+    def perform_create(self, serializer):
+        serializer.save(organization=self.request.user.organization)
 
 
 class SupplierViewSet(OrgModelViewSet):
-    queryset = Supplier.objects.all()
+    permission_classes = [permissions.IsAuthenticated, RolePermission]
     serializer_class = SupplierSerializer
+    
+    def get_queryset(self):
+        return Supplier.objects.filter(organization=self.request.user.organization)
+
+    def perform_create(self, serializer):
+        serializer.save(organization=self.request.user.organization)
 
 
 class CustomerViewSet(OrgModelViewSet):
-    queryset = Customer.objects.all()
+    permission_classes = [permissions.IsAuthenticated, RolePermission]
     serializer_class = CustomerSerializer
+    
+    def get_queryset(self):
+        return Customer.objects.filter(organization=self.request.user.organization)
+
+    def perform_create(self, serializer):
+        serializer.save(organization=self.request.user.organization)
 
 
 class SaleViewSet(OrgModelViewSet):
-    queryset = Sale.objects.all()
+    permission_classes = [permissions.IsAuthenticated, RolePermission]
     serializer_class = SaleSerializer
+    
+    def get_queryset(self):
+        return Sale.objects.filter(organization=self.request.user.organization)
+
+    def perform_create(self, serializer):
+        serializer.save(organization=self.request.user.organization)
 
 
 class SaleItemViewSet(OrgModelViewSet):
@@ -106,8 +149,13 @@ class SaleItemViewSet(OrgModelViewSet):
 
 
 class PurchaseViewSet(OrgModelViewSet):
-    queryset = Purchase.objects.all()
     serializer_class = PurchaseSerializer
+    
+    def get_queryset(self):
+        return Purchase.objects.filter(organization=self.request.user.organization)
+
+    def perform_create(self, serializer):
+        serializer.save(organization=self.request.user.organization)
 
 
 class PurchaseItemViewSet(OrgModelViewSet):
@@ -174,12 +222,13 @@ class SalesReportAPIView(APIView):
     permission_classes = [IsAuthenticated]  # optional
 
     def get(self, request):
+        user = request.user
         # ---- Filters ----
         start_date = request.query_params.get("from")
         end_date = request.query_params.get("to")
         search = request.query_params.get("search")
 
-        sales = Sale.objects.select_related("customer").prefetch_related("items")
+        sales = Sale.objects.select_related("customer", "organization").prefetch_related("items")
 
         if start_date:
             sales = sales.filter(created_at__date__gte=parse_date(start_date))
@@ -210,6 +259,7 @@ class SalesReportAPIView(APIView):
 
         data = {
             "summary": {
+                "organization": user.organization.name if user.organization else "",
                 "invoices": invoices_count,
                 "items_sold": total_items_sold,
                 "revenue": float(total_revenue),
@@ -228,10 +278,11 @@ class StockReportAPIView(APIView):
     permission_classes = [IsAuthenticated]  # optional
 
     def get(self, request):
+        user = request.user
         search = request.query_params.get("search")
 
         # ---- Filter products ----
-        products = Product.objects.select_related("category").all()
+        products = Product.objects.select_related("category", "organization").all()
 
         if search:
             products = products.filter(
@@ -261,6 +312,7 @@ class StockReportAPIView(APIView):
 
         data = {
             "summary": {
+                "organization": user.organization.name if user.organization else "",
                 "stock_value_cost": float(stock_value_cost),
                 "stock_value_retail": float(stock_value_retail),
                 "low_stock_items": low_stock_count,
@@ -273,65 +325,72 @@ class StockReportAPIView(APIView):
 
 
 # ===========  InventoryDashboardAPIView  ========
+
 class InventoryDashboardAPIView(APIView):
-    permission_classes = [IsAuthenticated]  # optional
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        user = request.user
+        org = user.organization
         now = timezone.now()
         seven_days_ago = now - timedelta(days=6)
 
         # 1️⃣ Basic Stats
-        total_products = Product.objects.count()
-        total_suppliers = Supplier.objects.count()
-        low_stock_items = Product.objects.filter(current_stock__lte=F("reorder_level")).count()
+        total_products = Product.objects.filter(organization=org).count()
+        total_suppliers = Supplier.objects.filter(organization=org).count()
+        low_stock_items = Product.objects.filter(
+            organization=org, current_stock__lte=F("reorder_level")
+        ).count()
 
         total_stock_value_cost = (
-            Product.objects.aggregate(
-                total=Sum(F("purchase_price") * F("current_stock"))
-            )["total"]
+            Product.objects.filter(organization=org)
+            .aggregate(total=Sum(F("purchase_price") * F("current_stock")))["total"]
             or 0
         )
 
         total_stock_value_retail = (
-            Product.objects.aggregate(
-                total=Sum(F("sell_price") * F("current_stock"))
-            )["total"]
+            Product.objects.filter(organization=org)
+            .aggregate(total=Sum(F("sell_price") * F("current_stock")))["total"]
             or 0
         )
 
-
         # 2️⃣ Stock Value by Month (last 6 months)
         stock_by_month = (
-            Product.objects.annotate(month=TruncMonth("created_at"))
+            Product.objects.filter(organization=org)
+            .annotate(month=TruncMonth("created_at"))
             .values("month")
             .annotate(total_value=Sum(F("purchase_price") * F("current_stock")))
             .order_by("month")
         )
 
         stock_value_chart = [
-            {"month": item["month"].strftime("%b"), "value": float(item["total_value"] or 0)}
+            {"month": item["month"].strftime("%b"),
+             "value": float(item["total_value"] or 0)}
             for item in stock_by_month
         ]
 
         # 3️⃣ Sales Trend (last 7 days)
         sales_trend = (
-            Sale.objects.filter(created_at__date__gte=seven_days_ago)
-            .annotate(day=F("created_at__date"))
+            Sale.objects.filter(organization=org, created_at__date__gte=seven_days_ago)
+            .annotate(day=TruncDate("created_at"))
             .values("day")
             .annotate(total_sales=Sum("net_total"))
             .order_by("day")
         )
+
         sales_chart = [
             {"day": str(item["day"]), "sales": float(item["total_sales"] or 0)}
             for item in sales_trend
         ]
 
-        # 4️⃣ Product Category Distribution
+        # 4️⃣ Category Distribution
         category_distribution = (
-            Product.objects.values("category__name")
+            Product.objects.filter(organization=org)
+            .values("category__name")
             .annotate(count=Count("id"))
             .order_by("-count")
         )
+
         category_chart = [
             {"category": item["category__name"] or "Uncategorized", "count": item["count"]}
             for item in category_distribution
@@ -339,10 +398,13 @@ class InventoryDashboardAPIView(APIView):
 
         # 5️⃣ Top 5 Products Sold
         top_products = (
-            SaleItem.objects.values("product__name", "product__category__name")
-            .annotate(total_sold=Sum("quantity"), total_sales=Sum("subtotal"))
+            SaleItem.objects.filter(sale__organization=org)
+            .values("product__name", "product__category__name")
+            .annotate(total_sold=Sum("quantity"),
+                      total_sales=Sum("subtotal"))
             .order_by("-total_sold")[:5]
         )
+
         top_sold_list = [
             {
                 "name": item["product__name"],
@@ -353,9 +415,10 @@ class InventoryDashboardAPIView(APIView):
             for item in top_products
         ]
 
-        # ✅ Final Response
+        # 📦 Final JSON Response
         data = {
             "summary": {
+                "organization": org.name if org else "",
                 "total_products": total_products,
                 "total_suppliers": total_suppliers,
                 "low_stock_items": low_stock_items,
@@ -369,7 +432,112 @@ class InventoryDashboardAPIView(APIView):
             },
             "top_products_sold": top_sold_list,
         }
+
         return Response(data)
+
+
+
+
+
+# class InventoryDashboardAPIView(APIView):
+#     permission_classes = [IsAuthenticated]  # optional
+
+#     def get(self, request):
+#         user = request.user
+#         now = timezone.now()
+#         seven_days_ago = now - timedelta(days=6)
+
+#         # 1️⃣ Basic Stats
+#         total_products = Product.objects.filter(organization=user.organization).count()
+#         total_suppliers = Supplier.objects.filter(organization=user.organization).count()
+#         low_stock_items = Product.objects.filter(current_stock__lte=F("reorder_level"), organization=user.organization).count()
+
+#         total_stock_value_cost = (
+#             Product.objects.aggregate(
+#                 total=Sum(F("purchase_price") * F("current_stock"))
+#             )["total"]
+#             or 0
+#         )
+
+#         total_stock_value_retail = (
+#             Product.objects.aggregate(
+#                 total=Sum(F("sell_price") * F("current_stock")),
+#             )["total"]
+#             or 0
+#         )
+
+
+#         # 2️⃣ Stock Value by Month (last 6 months)
+#         stock_by_month = (
+#             Product.objects.annotate(month=TruncMonth("created_at"))
+#             .values("month")
+#             .annotate(total_value=Sum(F("purchase_price") * F("current_stock")))
+#             .order_by("month")
+#         )
+
+#         stock_value_chart = [
+#             {"month": item["month"].strftime("%b"), "value": float(item["total_value"] or 0)}
+#             for item in stock_by_month
+#         ]
+
+#         # 3️⃣ Sales Trend (last 7 days)
+#         sales_trend = (
+#             Sale.objects.filter(created_at__date__gte=seven_days_ago)
+#             .annotate(day=F("created_at__date"))
+#             .values("day")
+#             .annotate(total_sales=Sum("net_total"))
+#             .order_by("day")
+#         )
+#         sales_chart = [
+#             {"day": str(item["day"]), "sales": float(item["total_sales"] or 0)}
+#             for item in sales_trend
+#         ]
+
+#         # 4️⃣ Product Category Distribution
+#         category_distribution = (
+#             Product.objects.values("category__name")
+#             .annotate(count=Count("id"))
+#             .order_by("-count")
+#         )
+#         category_chart = [
+#             {"category": item["category__name"] or "Uncategorized", "count": item["count"]}
+#             for item in category_distribution
+#         ]
+
+#         # 5️⃣ Top 5 Products Sold
+#         top_products = (
+#             SaleItem.objects.values("product__name", "product__category__name")
+#             .annotate(total_sold=Sum("quantity"), total_sales=Sum("subtotal"))
+#             .order_by("-total_sold")[:5]
+#         )
+#         top_sold_list = [
+#             {
+#                 "name": item["product__name"],
+#                 "category": item["product__category__name"],
+#                 "quantity_sold": item["total_sold"],
+#                 "sales_value": float(item["total_sales"] or 0),
+#             }
+#             for item in top_products
+#         ]
+
+#         # ✅ Final Response
+#         data = {
+#             "summary": {
+#                 "organization": user.organization.name if user.organization else "",
+#                 "total_products": total_products,
+#                 "total_suppliers": total_suppliers,
+#                 "low_stock_items": low_stock_items,
+#                 "total_stock_value_cost": float(total_stock_value_cost),
+#                 "total_stock_value_retail": float(total_stock_value_retail),
+#             },
+#             "charts": {
+#                 "stock_value_by_month": stock_value_chart,
+#                 "sales_trend_last_7_days": sales_chart,
+#                 "category_distribution": category_chart,
+#             },
+#             "top_products_sold": top_sold_list,
+#         }
+#         return Response(data)
 
 
 

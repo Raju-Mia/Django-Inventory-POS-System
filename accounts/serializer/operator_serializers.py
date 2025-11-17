@@ -38,17 +38,14 @@ class OperatorSerializer(serializers.ModelSerializer):
             "created_at",
             "password",
         ]
-        read_only_fields = ["id", "organization", "role", "created_at"]
+        read_only_fields = ["id", "organization", "created_at"]
 
     def create(self, validated_data):
         request = self.context.get("request")
         creator = request.user if request else None
-
+        
         # Generate random password if not provided
         password = validated_data.pop("password", None) or generate_random_password()
-
-        # Always assign role = operator
-        # validated_data["role"] = 
 
         # ✅ Generate unique username
         base_username = (validated_data.get("first_name") or "operator").replace(" ", "").lower()

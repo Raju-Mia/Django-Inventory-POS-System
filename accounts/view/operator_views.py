@@ -9,7 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 
 from accounts.models import CustomUser, Organization
 from accounts.serializer.operator_serializers import OperatorSerializer
-
+from core.permissions import RolePermission
 
 # Filtering Class
 class OperatorFilter(filters.FilterSet):
@@ -26,7 +26,7 @@ class OperatorFilter(filters.FilterSet):
 
 # List Operators with Filtering
 class OperatorListAPIView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, RolePermission]
 
     def get(self, request):
         user = request.user
@@ -55,7 +55,7 @@ class OperatorListAPIView(APIView):
 
 # Create Operator
 class OperatorCreateAPIView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, RolePermission]
 
     def post(self, request):
         # Operators cannot create new operators
@@ -64,6 +64,8 @@ class OperatorCreateAPIView(APIView):
                 {"error": "User are not allowed to create new operators."},
                 status=status.HTTP_403_FORBIDDEN
             )
+            
+            
 
         # Must belong to an organization
         if not request.user.organization:
@@ -73,6 +75,10 @@ class OperatorCreateAPIView(APIView):
             )
 
         serializer = OperatorSerializer(data=request.data, context={"request": request})
+        
+
+            
+            
         if serializer.is_valid():
             operator = serializer.save()
             response_data = OperatorSerializer(operator).data
@@ -83,7 +89,7 @@ class OperatorCreateAPIView(APIView):
 
 # Operator Details
 class OperatorDetailAPIView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, RolePermission]
 
     def get(self, request, id):
         operator = get_object_or_404(
@@ -98,7 +104,7 @@ class OperatorDetailAPIView(APIView):
 
 # Soft Delete Operator
 class OperatorDeleteAPIView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, RolePermission]
 
     def delete(self, request, id):
         # Operators cannot delete others
