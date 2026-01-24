@@ -195,7 +195,7 @@ Message:
                 subject,
                 body,
                 settings.DEFAULT_FROM_EMAIL,
-                ['nazmultec1011@gmail.com'],
+                ['patwarysmah59@gmail.com'],
                 fail_silently=True,
             )
         except Exception as e:
