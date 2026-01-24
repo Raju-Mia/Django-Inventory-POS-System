@@ -207,7 +207,7 @@ class UserSignUpView(APIView):
             last_name = serializer.validated_data.get('last_name', '')
             password = serializer.validated_data['password']
             organization_name = serializer.validated_data.get('organization_name')
-            role = serializer.validated_data.get('role', 'manager')  # ✅ take from frontend
+            role = serializer.validated_data.get('role', 'admin')  # ✅ take from frontend
 
 
             # Check if user already exists

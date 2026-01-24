@@ -108,7 +108,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         organization_name = validated_data.pop('organization_name', None)
-        role = validated_data.pop('role', 'manager')  # default if not provided
+        role = validated_data.pop('role', 'admin')  # default if not provided
 
         # Generate unique username
         base_username = validated_data.get('first_name', '').replace(' ', '').lower() or "user"

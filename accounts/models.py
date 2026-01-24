@@ -43,7 +43,7 @@ class CustomUser(AbstractUser):
         ("staff", "Staff"),
         ("operator", "Operator"),
     ]
-    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="manager")
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="admin")
     profile_picture = models.ImageField(upload_to='customuser/profile_images/', blank=True)
     is_owner = models.BooleanField(default=False)
 

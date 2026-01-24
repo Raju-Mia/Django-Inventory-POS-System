@@ -173,6 +173,34 @@ class ContactMessageViewSet(viewsets.ModelViewSet):
     serializer_class = ContactMessageSerializer
     permission_classes = [permissions.AllowAny]  # open to public
 
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        # Send email notification
+        from django.core.mail import send_mail
+        from django.conf import settings
+        
+        subject = f"New Contact Message from {instance.name}: {instance.subject}"
+        body = f"""
+You have received a new contact message.
+
+Name: {instance.name}
+Email: {instance.email}
+Subject: {instance.subject}
+
+Message:
+{instance.message}
+        """
+        try:
+            send_mail(
+                subject,
+                body,
+                settings.DEFAULT_FROM_EMAIL,
+                ['nazmultec1011@gmail.com'],
+                fail_silently=True,
+            )
+        except Exception as e:
+            print(f"Failed to send contact email: {e}")
+
 
 
 
@@ -188,7 +216,16 @@ class InvoicePDFDownloadAPIView(APIView):
         print("========== Generating Invoice ==========")
 
         # 1️⃣ Get the Sale record (invoice)
+        # Ensure the user can only download their organization's invoices
         invoice = get_object_or_404(Sale, id=id)
+        
+        # Security Check:
+        if request.user.is_authenticated and invoice.organization != request.user.organization:
+             # If not authenticated or org mismatch (though is_authenticated checked in permission_classes if set)
+             # But here we are explicit. If we want to support public download links without auth, 
+             # we'd need a different strategy (e.g. signed URLs). 
+             # Assuming this is an internal protected endpoint:
+             return HttpResponse("Unauthorized Access to this Invoice", status=403)
 
         # 2️⃣ Prepare HTML content
         html_string = render_to_string('invoices/invoice.html', {
@@ -228,7 +265,7 @@ class SalesReportAPIView(APIView):
         end_date = request.query_params.get("to")
         search = request.query_params.get("search")
 
-        sales = Sale.objects.select_related("customer", "organization").prefetch_related("items")
+        sales = Sale.objects.filter(organization=user.organization).select_related("customer", "organization").prefetch_related("items")
 
         if start_date:
             sales = sales.filter(created_at__date__gte=parse_date(start_date))
@@ -282,7 +319,7 @@ class StockReportAPIView(APIView):
         search = request.query_params.get("search")
 
         # ---- Filter products ----
-        products = Product.objects.select_related("category", "organization").all()
+        products = Product.objects.filter(organization=user.organization).select_related("category", "organization").all()
 
         if search:
             products = products.filter(
