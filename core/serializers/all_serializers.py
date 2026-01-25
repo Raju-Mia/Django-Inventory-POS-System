@@ -64,11 +64,22 @@ class SaleItemSerializer(serializers.ModelSerializer):
 
 class SaleSerializer(serializers.ModelSerializer):
     items = SaleItemSerializer(many=True)
+    customer_name = serializers.CharField(required=False, allow_null=True, allow_blank=True)
 
     class Meta:
         model = Sale
         fields = "__all__"
         read_only_fields = ["organization", "created_by", "created_at", "updated_at", "total_amount", "net_total"]
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        # If customer_name is null/empty, fall back to customer object name or "Walk-in"
+        if not ret.get("customer_name"):
+            if instance.customer:
+                ret["customer_name"] = instance.customer.name
+            else:
+                ret["customer_name"] = "Walk-in"
+        return ret
 
     def create(self, validated_data):
         items_data = validated_data.pop("items", [])
@@ -243,6 +254,8 @@ class SaleSummarySerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def get_customer_name(self, obj):
+        if obj.customer_name:
+            return obj.customer_name
         return obj.customer.name if obj.customer else "Walk-in"
 
     def get_items_count(self, obj):

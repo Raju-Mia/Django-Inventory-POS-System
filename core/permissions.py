@@ -91,20 +91,32 @@ class RolePermission(BasePermission):
         # ----------------------
         # 🔥 4. OPERATION ROLE
         # ----------------------
-        if role == "operation":
+        if role == "operator":
+            # 1. Allowed to view Dashboard
+            if view_name == "InventoryDashboardAPIView":
+                return True
 
-            # Allowed viewsets
-            allowed_reads = [
+            # 2. Allowed to view/create Products & Categories
+            allowed_write = [
                 "ProductViewSet",
                 "CategoryViewSet",
-                "SupplierViewSet"
+                "SaleViewSet",    # POS
+                "SaleItemViewSet", # POS
+                "CustomerViewSet" # POS needs customers
+            ]
+            
+            # 3. Allowed to VIEW Users (as requested)
+            allowed_read = [
+                "UserViewSet"
             ]
 
-            # Only read allowed
             if request.method in SAFE_METHODS:
-                return view_name in allowed_reads
+                return view_name in (allowed_write + allowed_read)
 
-            # ❌ No write access
+            if request.method == "POST":
+                return view_name in allowed_write
+
+            # No update or delete, and NO access to suppliers
             return False
 
         # Unknown role = deny
